@@ -1,5 +1,6 @@
 import { Plugin } from "obsidian";
 
+import { registerPromoteCommand } from "./src/commands/promote";
 import { registerPullCommands } from "./src/commands/pull";
 import {
 	DEFAULT_SETTINGS,
@@ -26,6 +27,7 @@ export default class RecallSyncPlugin extends Plugin {
 
 		this.addSettingTab(new RecallSyncSettingsTab(this.app, this));
 		registerPullCommands(this);
+		registerPromoteCommand(this);
 
 		this.addCommand({
 			id: "sync-now",

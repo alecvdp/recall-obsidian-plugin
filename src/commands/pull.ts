@@ -17,11 +17,13 @@ import { RecallClient } from "../recall/client";
 import { obsidianFetch } from "../recall/fetchers-obsidian";
 import type { CardPreview } from "../recall/types";
 import type { RecallSyncSettings } from "../settings";
+import { ensureDefaultBase, vaultTarget } from "../sync/default-base";
 import { SyncEngine } from "../sync/sync-engine";
 import { CardSuggestModal } from "./card-suggest-modal";
 
 export interface CommandHost extends Plugin {
 	settings: RecallSyncSettings;
+	saveSettings(): Promise<void>;
 }
 
 export function registerPullCommands(plugin: CommandHost): void {
@@ -73,6 +75,7 @@ async function syncOne(
 	try {
 		const full = await client.getCard(cardId);
 		const result = await engine.syncCard(full);
+		await ensureDefaultBase(vaultTarget(plugin.app.vault), plugin.settings.folder);
 		progress.hide();
 		new Notice(`Recall: ${result.outcome} — ${result.file.basename}`);
 		const leaf = plugin.app.workspace.getLeaf(false);
@@ -136,6 +139,10 @@ async function pullAllNew(plugin: CommandHost): Promise<void> {
 	if (maxSeenAt && maxSeenAt !== plugin.settings.lastSyncCursor) {
 		plugin.settings.lastSyncCursor = maxSeenAt;
 		await plugin.saveSettings();
+	}
+
+	if (created + updated + renamed > 0) {
+		await ensureDefaultBase(vaultTarget(plugin.app.vault), plugin.settings.folder);
 	}
 
 	progress.hide();
