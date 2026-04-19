@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "node esbuild.config.mjs",
     "build": "tsc -noEmit -skipLibCheck && node esbuild.config.mjs production",
-    "typecheck": "tsc -noEmit -skipLibCheck"
+    "typecheck": "tsc -noEmit -skipLibCheck",
+    "test": "tsx --test src/**/*.test.ts"
   },
   "keywords": [
     "obsidian",
@@ -16,11 +17,14 @@
   "author": "Alec van der Poel",
   "license": "MIT",
   "devDependencies": {
+    "@types/js-yaml": "^4.0.9",
     "@types/node": "^20.11.30",
     "builtin-modules": "^4.0.0",
     "esbuild": "^0.24.0",
+    "js-yaml": "^4.1.1",
     "obsidian": "latest",
     "tslib": "^2.6.2",
+    "tsx": "^4.21.0",
     "typescript": "^5.4.0"
   }
 }
