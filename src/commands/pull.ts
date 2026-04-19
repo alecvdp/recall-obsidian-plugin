@@ -23,6 +23,7 @@ import { CardSuggestModal } from "./card-suggest-modal";
 
 export interface CommandHost extends Plugin {
 	settings: RecallSyncSettings;
+	saveSettings(): Promise<void>;
 }
 
 export function registerPullCommands(plugin: CommandHost): void {
@@ -110,6 +111,7 @@ async function pullAllNew(plugin: CommandHost): Promise<void> {
 	let renamed = 0;
 	let failed = 0;
 	let i = 0;
+	let maxSeenAt: string | null = plugin.settings.lastSyncCursor;
 
 	for (const card of cards) {
 		i++;
@@ -120,6 +122,9 @@ async function pullAllNew(plugin: CommandHost): Promise<void> {
 			if (res.outcome === "created") created++;
 			else if (res.outcome === "updated") updated++;
 			else if (res.outcome === "renamed") renamed++;
+			if (!maxSeenAt || full.created_at > maxSeenAt) {
+				maxSeenAt = full.created_at;
+			}
 		} catch (err) {
 			failed++;
 			console.warn(`Recall: failed to sync ${card.id}`, err);
@@ -129,6 +134,11 @@ async function pullAllNew(plugin: CommandHost): Promise<void> {
 				return;
 			}
 		}
+	}
+
+	if (maxSeenAt && maxSeenAt !== plugin.settings.lastSyncCursor) {
+		plugin.settings.lastSyncCursor = maxSeenAt;
+		await plugin.saveSettings();
 	}
 
 	if (created + updated + renamed > 0) {

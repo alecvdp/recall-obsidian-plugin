@@ -14,6 +14,7 @@ import {
 export interface SettingsHost extends Plugin {
 	settings: RecallSyncSettings;
 	saveSettings(): Promise<void>;
+	restartBackgroundSync(): void;
 }
 
 export class RecallSyncSettingsTab extends PluginSettingTab {
@@ -41,6 +42,7 @@ export class RecallSyncSettingsTab extends PluginSettingTab {
 					.onChange(async (value) => {
 						s.apiKey = value.trim();
 						await this.host.saveSettings();
+						this.host.restartBackgroundSync();
 					});
 			})
 			.addButton((btn) =>
@@ -91,6 +93,7 @@ export class RecallSyncSettingsTab extends PluginSettingTab {
 				dd.onChange(async (value) => {
 					s.syncIntervalMinutes = Number(value);
 					await this.host.saveSettings();
+					this.host.restartBackgroundSync();
 				});
 			});
 
