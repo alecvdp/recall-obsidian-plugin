@@ -16,10 +16,6 @@ Status: early development. Not yet on community plugins.
 - Write back to Recall. The public API is read-only; write support is on their roadmap.
 - Duplicate Recall's MCP surface. If your editor speaks MCP, connect to Recall's MCP server directly.
 
-## Roadmap
-
-See [Linear project](https://linear.app/alecv/project/recall-obsidian-plugin-a1a0e138a150).
-
 ## Development
 
 ```bash
