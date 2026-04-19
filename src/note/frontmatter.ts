@@ -5,7 +5,7 @@
  *  - A note may have user-authored frontmatter keys the plugin doesn't own.
  *    Parse preserves them; serialize writes them back untouched.
  *  - Recall-managed keys always overwrite their same-named user key on sync.
- *    Callers merge with `{ ...user, ...recall }`.
+ *    Callers merge with `mergeRecallFields`.
  *  - Key order on write is deterministic: canonical Recall keys in a fixed
  *    order first, then any additional keys alphabetically. This keeps diffs
  *    stable across re-syncs.
@@ -13,7 +13,14 @@
 
 import { dump as yamlDump, load as yamlLoad } from "js-yaml";
 
-/** Canonical Recall-managed frontmatter shape. */
+/**
+ * Canonical Recall-managed frontmatter shape.
+ *
+ * All fields are what the plugin knows how to populate today from the public
+ * API. `recall_tags` stores flat tag names; `recall_tag_paths` preserves the
+ * hierarchical "A / B / C" strings Recall returns for users who want to
+ * build Bases views across categories.
+ */
 export interface RecallFrontmatter {
 	recall_id: string;
 	title: string;
@@ -21,11 +28,10 @@ export interface RecallFrontmatter {
 	synced_at: string;
 	recall_url?: string;
 	source_url?: string;
-	source_type?: string;
-	source_author?: string;
-	duration_seconds?: number;
-	word_count?: number;
+	source_domain?: string;
+	image?: string;
 	recall_tags?: string[];
+	recall_tag_paths?: string[];
 	processed?: boolean;
 	promoted_to?: string;
 }
@@ -33,16 +39,15 @@ export interface RecallFrontmatter {
 /** Every key the plugin manages, in canonical write order. */
 export const RECALL_KEYS = [
 	"recall_id",
-	"recall_url",
 	"title",
+	"recall_url",
 	"source_url",
-	"source_type",
-	"source_author",
+	"source_domain",
+	"image",
 	"created_at",
 	"synced_at",
-	"duration_seconds",
-	"word_count",
 	"recall_tags",
+	"recall_tag_paths",
 	"processed",
 	"promoted_to",
 ] as const satisfies readonly (keyof RecallFrontmatter)[];
@@ -71,7 +76,6 @@ export function parseNote(content: string): ParsedNote {
 	try {
 		parsed = yamlLoad(yaml);
 	} catch {
-		// Corrupt frontmatter — treat as body so we don't eat user content.
 		return { frontmatter: {}, body: content, hadFrontmatter: false };
 	}
 	if (parsed === null || parsed === undefined) {
@@ -121,7 +125,7 @@ function orderForWrite(fm: FrontmatterRecord): FrontmatterRecord {
  * Merge fresh Recall data into existing frontmatter, preserving user keys.
  * Recall keys overwrite whatever was there; undefined Recall values clear
  * the corresponding key so optional fields don't stick around after a card
- * stops having e.g. a duration.
+ * stops having e.g. an image.
  */
 export function mergeRecallFields(
 	existing: FrontmatterRecord,

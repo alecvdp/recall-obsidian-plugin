@@ -1,7 +1,7 @@
 /**
  * Round-trip tests for frontmatter + fence + compose.
  *
- * The invariants we care about, in priority order:
+ * Invariants, in priority order:
  *  1. User content below the fence survives re-sync.
  *  2. User-authored frontmatter keys survive re-sync.
  *  3. Recall-managed content is always overwritten with fresh data.
@@ -21,17 +21,18 @@ import { composeNote, mergeRecallFields, parseNote } from "./frontmatter";
 const SYNC_TIME = new Date("2026-04-19T12:00:00Z");
 
 const BASE_CARD: Card = {
-	id: "card-abc",
+	card_id: "d78d7ed5-1404-4cf3-ad83-09b4b38dee0a",
 	title: "How Rust's borrow checker evolved",
-	created_at: "2026-04-18T10:00:00Z",
-	source_url: "https://example.com/rust",
-	source_type: "article",
-	source_author: "Jane Doe",
-	word_count: 2400,
-	tags: ["rust", "plt"],
+	created_at: "2026-04-18T10:00:00.000000+00:00",
+	source_url: "https://www.youtube.com/watch?v=abc123",
+	image: "https://i.ytimg.com/vi/abc123/sddefault.jpg",
+	tags: [
+		{ tag_id: "t1", name: "Rust", path: "Technology / Programming / Rust" },
+		{ tag_id: "t2", name: "PLT", path: "Technology / Programming" },
+	],
 	chunks: [
-		{ content: "First chunk about borrowing.\n" },
-		{ content: "\nSecond chunk about lifetimes." },
+		{ chunk_id: "c1", content: "First chunk about borrowing.\n" },
+		{ chunk_id: "c2", content: "\nSecond chunk about lifetimes." },
 	],
 };
 
@@ -96,16 +97,16 @@ describe("fence", () => {
 
 describe("mergeRecallFields", () => {
 	it("overwrites Recall keys and preserves user keys", () => {
-		const existing = { aliases: ["a"], source_type: "article", processed: true };
+		const existing = { aliases: ["a"], source_url: "https://old", processed: true };
 		const merged = mergeRecallFields(existing, {
 			recall_id: "id",
 			title: "new",
 			created_at: "c",
 			synced_at: "s",
-			source_type: "podcast",
+			source_url: "https://new",
 		});
 		assert.deepEqual(merged.aliases, ["a"]);
-		assert.equal(merged.source_type, "podcast");
+		assert.equal(merged.source_url, "https://new");
 		// processed isn't in the patch, so mergeRecallFields must clear it so
 		// stale Recall values don't linger after a card changes.
 		assert.equal(merged.processed, undefined);
@@ -119,9 +120,15 @@ describe("composeNoteFromCard", () => {
 			syncedAt: SYNC_TIME,
 		});
 		const parsed = parseNote(note);
-		assert.equal(parsed.frontmatter.recall_id, "card-abc");
-		assert.equal(parsed.frontmatter.source_type, "article");
-		assert.deepEqual(parsed.frontmatter.recall_tags, ["rust", "plt"]);
+		assert.equal(parsed.frontmatter.recall_id, BASE_CARD.card_id);
+		assert.equal(parsed.frontmatter.source_url, BASE_CARD.source_url);
+		assert.equal(parsed.frontmatter.source_domain, "youtube.com");
+		assert.equal(parsed.frontmatter.image, BASE_CARD.image);
+		assert.deepEqual(parsed.frontmatter.recall_tags, ["Rust", "PLT"]);
+		assert.deepEqual(parsed.frontmatter.recall_tag_paths, [
+			"Technology / Programming / Rust",
+			"Technology / Programming",
+		]);
 		const split = splitBody(parsed.body);
 		assert.ok(split);
 		assert.match(split.managed, /First chunk about borrowing\./);
@@ -138,8 +145,8 @@ describe("composeNoteFromCard", () => {
 
 		const changedCard: Card = {
 			...BASE_CARD,
-			chunks: [{ content: "FRESH content replacing everything." }],
-			word_count: 3000,
+			chunks: [{ chunk_id: "c3", content: "FRESH content replacing everything." }],
+			title: "Updated title",
 		};
 		const resynced = composeNoteFromCard(changedCard, {
 			existing: withUserNotes,
@@ -151,7 +158,7 @@ describe("composeNoteFromCard", () => {
 		assert.match(resynced, /FRESH content replacing everything\./);
 		assert.doesNotMatch(resynced, /First chunk about borrowing\./);
 		const parsed = parseNote(resynced);
-		assert.equal(parsed.frontmatter.word_count, 3000);
+		assert.equal(parsed.frontmatter.title, "Updated title");
 	});
 
 	it("preserves user-authored frontmatter keys across re-sync", () => {
@@ -205,19 +212,36 @@ describe("composeNoteFromCard", () => {
 			syncedAt: SYNC_TIME,
 		});
 		const strippedCard: Card = {
-			id: BASE_CARD.id,
+			card_id: BASE_CARD.card_id,
 			title: BASE_CARD.title,
 			created_at: BASE_CARD.created_at,
-			chunks: [{ content: "still here" }],
+			tags: [],
+			chunks: [{ chunk_id: "c1", content: "still here" }],
 		};
 		const resynced = composeNoteFromCard(strippedCard, {
 			existing: first,
 			syncedAt: SYNC_TIME,
 		});
 		const parsed = parseNote(resynced);
-		assert.equal(parsed.frontmatter.source_type, undefined);
-		assert.equal(parsed.frontmatter.word_count, undefined);
+		assert.equal(parsed.frontmatter.source_url, undefined);
+		assert.equal(parsed.frontmatter.source_domain, undefined);
+		assert.equal(parsed.frontmatter.image, undefined);
 		assert.equal(parsed.frontmatter.recall_tags, undefined);
+		assert.equal(parsed.frontmatter.recall_tag_paths, undefined);
+	});
+
+	it("strips www. from source_domain", () => {
+		const card: Card = { ...BASE_CARD, source_url: "https://www.example.com/x" };
+		const note = composeNoteFromCard(card, { existing: null, syncedAt: SYNC_TIME });
+		const parsed = parseNote(note);
+		assert.equal(parsed.frontmatter.source_domain, "example.com");
+	});
+
+	it("leaves source_domain unset when source_url is malformed", () => {
+		const card: Card = { ...BASE_CARD, source_url: "not a url" };
+		const note = composeNoteFromCard(card, { existing: null, syncedAt: SYNC_TIME });
+		const parsed = parseNote(note);
+		assert.equal(parsed.frontmatter.source_domain, undefined);
 	});
 });
 
@@ -235,7 +259,6 @@ describe("updateFrontmatter", () => {
 			parsed.frontmatter.promoted_to,
 			"[[Rust Borrow Checker Synthesis]]",
 		);
-		// Body must be byte-identical to the original body.
 		const before = parseNote(note).body;
 		assert.equal(parsed.body, before);
 	});

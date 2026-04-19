@@ -2,16 +2,15 @@
  * Compose a Card into full note content, preserving user edits on re-sync.
  *
  * Merge rules:
- *  - Frontmatter: user-authored keys are preserved. Recall-owned keys are
- *    overwritten (see `mergeRecallFields`).
- *  - Body: anything outside the `%% recall:start/end %%` fence is preserved.
- *    The fence's contents are replaced with freshly concatenated chunks.
- *  - First-ever sync: a fence is created; there is no user content yet.
+ *  - Frontmatter: user-authored keys preserved. Recall-owned keys overwritten.
+ *  - Body: content outside the `%% recall:start/end %%` fence is preserved.
+ *    The fenced contents are replaced with freshly concatenated chunks.
+ *  - First-ever sync: a fence is created; no user content yet.
  *  - First sync into a user-authored note: fence is prepended; the user's
  *    existing body moves into the `after` section.
  */
 
-import type { Card } from "../recall/types";
+import type { Card, RecallTag } from "../recall/types";
 import {
 	composeNote,
 	mergeRecallFields,
@@ -25,11 +24,7 @@ export interface ComposeContext {
 	existing: string | null;
 	/** Time of this sync; injected for testability. */
 	syncedAt: Date;
-	/**
-	 * URL back to the card in the Recall web app. The public API doesn't
-	 * always return this, so it's passed in explicitly by the caller that
-	 * knows how to construct it.
-	 */
+	/** URL back to the card in the Recall web app, if caller can build one. */
 	recallUrl?: string;
 }
 
@@ -65,19 +60,22 @@ export function cardToFrontmatter(
 	ctx: ComposeContext,
 ): Partial<RecallFrontmatter> {
 	const fm: Partial<RecallFrontmatter> = {
-		recall_id: card.id,
+		recall_id: card.card_id,
 		title: card.title,
 		created_at: card.created_at,
 		synced_at: ctx.syncedAt.toISOString(),
 	};
 	if (ctx.recallUrl) fm.recall_url = ctx.recallUrl;
-	if (card.source_url) fm.source_url = card.source_url;
-	if (card.source_type) fm.source_type = card.source_type;
-	if (card.source_author) fm.source_author = card.source_author;
-	if (card.duration_seconds !== undefined)
-		fm.duration_seconds = card.duration_seconds;
-	if (card.word_count !== undefined) fm.word_count = card.word_count;
-	if (card.tags && card.tags.length > 0) fm.recall_tags = [...card.tags];
+	if (card.source_url) {
+		fm.source_url = card.source_url;
+		const domain = extractDomain(card.source_url);
+		if (domain) fm.source_domain = domain;
+	}
+	if (card.image) fm.image = card.image;
+	if (card.tags && card.tags.length > 0) {
+		fm.recall_tags = card.tags.map((t: RecallTag) => t.name);
+		fm.recall_tag_paths = card.tags.map((t: RecallTag) => t.path);
+	}
 	return fm;
 }
 
@@ -86,6 +84,15 @@ function concatenateChunks(card: Card): string {
 		.map((c) => c.content.trim())
 		.filter((s) => s.length > 0)
 		.join("\n\n");
+}
+
+function extractDomain(url: string): string | undefined {
+	try {
+		const host = new URL(url).hostname;
+		return host.replace(/^www\./, "") || undefined;
+	} catch {
+		return undefined;
+	}
 }
 
 export { splitBody };

@@ -75,9 +75,12 @@ export function errorForStatus(
 }
 
 function extractRequestId(body: unknown): string | undefined {
-	if (body && typeof body === "object" && "request_id" in body) {
-		const id = (body as { request_id: unknown }).request_id;
-		return typeof id === "string" ? id : undefined;
+	if (body && typeof body === "object" && "detail" in body) {
+		const detail = (body as { detail: unknown }).detail;
+		if (detail && typeof detail === "object" && "request_id" in detail) {
+			const id = (detail as { request_id: unknown }).request_id;
+			return typeof id === "string" ? id : undefined;
+		}
 	}
 	return undefined;
 }

@@ -1,77 +1,97 @@
 /**
- * Recall public API types.
+ * Recall public API types — validated against real responses from
+ * `scripts/probe.ts` on 2026-04-19.
  *
- * The official docs do not publish a JSON schema; these types reflect what the
- * docs describe ("List Cards", "Get Card", "Search") and will be tightened
- * against real responses captured by `scripts/probe.ts`.
+ * Base URL: https://backend.getrecall.ai/api/v1
+ * Auth:     Authorization: Bearer sk_...
  *
- * Fields the docs explicitly mark as "omitted when not available" are typed
- * as optional. Anything not mentioned is left out — we do not invent fields.
+ * Quirks baked into the surface:
+ *  - `id` on List Cards, `card_id` on Get Card / Search. Same underlying UUID;
+ *    the API is inconsistent about the field name.
+ *  - No pagination on List Cards. `total_count` is returned; the response
+ *    contains every matching card. Sync uses `date_from` to bound payload.
+ *  - No `source_type` / `source_author` / `duration` / `word_count` fields.
+ *    We infer type/channel from `source_url` where useful.
  */
 
 export type IsoDateString = string;
 
-/** Preview returned by List Cards. */
+/** Tag object returned on every card. */
+export interface RecallTag {
+	tag_id: string;
+	name: string;
+	/** Hierarchical path, e.g. "Productivity / Apps / Obsidian". */
+	path: string;
+}
+
+/** Chunk of a card's content as returned by Get Card / Search. */
+export interface CardChunk {
+	chunk_id: string;
+	content: string;
+	/** Origin within Recall's pipeline, e.g. "notebook" or "reader". */
+	source?: string;
+	/** Timestamp strings like "(00:00:00)" for audio/video content. */
+	timestamps?: string[];
+}
+
+/** Card preview shape from List Cards. */
 export interface CardPreview {
 	id: string;
 	title: string;
 	created_at: IsoDateString;
+	tags: RecallTag[];
+	image?: string;
 	source_url?: string;
-	source_type?: string;
-	tags?: string[];
 }
 
-/** Single chunk of a card's content. */
-export interface CardChunk {
-	id?: string;
-	content: string;
-	/** Some endpoints attach a relevance score when query-targeted. */
-	score?: number;
-}
-
-/** Full card returned by Get Card, including content chunks. */
-export interface Card extends CardPreview {
-	chunks: CardChunk[];
-	source_author?: string;
-	duration_seconds?: number;
-	word_count?: number;
-}
-
-/** Single hit from semantic Search — chunk-level, not card-level. */
-export interface SearchHit {
+/**
+ * Full card shape from Get Card. Also identical to the per-document shape
+ * returned inside Search results, so `SearchDocument` is an alias.
+ *
+ * Note the `card_id` field name (not `id`, as in CardPreview).
+ */
+export interface Card {
 	card_id: string;
 	title: string;
-	chunk: CardChunk;
+	created_at: IsoDateString;
+	chunks: CardChunk[];
+	tags: RecallTag[];
+	image?: string;
 	source_url?: string;
-	source_type?: string;
-	created_at?: IsoDateString;
 }
+
+export type SearchDocument = Card;
 
 export interface ListCardsResponse {
-	cards: CardPreview[];
-	/** Cursor for the next page; absent when no more results. */
-	next_cursor?: string;
-}
-
-export interface SearchResponse {
-	results: SearchHit[];
+	results: CardPreview[];
+	total_count: number;
 }
 
 export interface ListCardsParams {
-	limit?: number;
-	cursor?: string;
-	created_after?: IsoDateString;
-	created_before?: IsoDateString;
-	source_type?: string;
-	tag?: string;
+	tags?: string;
+	date_from?: IsoDateString;
+	date_to?: IsoDateString;
+	source_url_contains?: string;
 }
 
 export interface GetCardParams {
-	/** When provided, the API returns the most relevant chunks for this query. */
-	query?: string;
+	/** Returns only the chunks most relevant to this query. */
+	focus_query?: string;
+	/** Cap the number of chunks returned. */
+	max_chunks?: number;
 }
 
 export interface SearchParams {
-	query: string;
-	limit?: number;
+	q: string;
+	mode?: "focused" | "exhaustive";
+	card_id?: string;
+	tags?: string;
+	date_from?: IsoDateString;
+	date_to?: IsoDateString;
+	source_url_contains?: string;
+}
+
+export interface SearchResponse {
+	documents: SearchDocument[];
+	total_cards: number;
 }
