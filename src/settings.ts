@@ -37,6 +37,20 @@ export interface RecallSyncSettings {
 	 * `https://app.recall.it/card/{id}` with `{id}` as the placeholder.
 	 */
 	recallWebAppUrlTemplate: string;
+
+	/**
+	 * Background-sync cursor: the latest `created_at` we've successfully
+	 * ingested. Next tick passes this as `date_from` to List Cards so we
+	 * only fetch newly-created cards. Null means "we haven't synced yet"
+	 * and the next tick will pull the full library.
+	 */
+	lastSyncCursor: string | null;
+
+	/**
+	 * Wall-clock time of the last successful background-sync tick. Powers
+	 * the status-bar "synced Xm ago" display. Null until the first success.
+	 */
+	lastSyncedAt: string | null;
 }
 
 export const DEFAULT_SETTINGS: RecallSyncSettings = {
@@ -45,6 +59,8 @@ export const DEFAULT_SETTINGS: RecallSyncSettings = {
 	filenameTemplate: "{{title}}",
 	syncIntervalMinutes: 0,
 	recallWebAppUrlTemplate: "",
+	lastSyncCursor: null,
+	lastSyncedAt: null,
 };
 
 /** Valid choices for the sync interval dropdown. */
